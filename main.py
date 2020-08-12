@@ -1,18 +1,19 @@
 from __future__ import print_function
-import os
 
 import argparse
+import math
+import os
+import time
+
+import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.nn.parallel
 import torch.optim as optim
 import torch.utils.data
-from torch.autograd import Variable
-import torch.nn.functional as F
-import numpy as np
-import time
-import math
 from tensorboardX import SummaryWriter
+from torch.autograd import Variable
 from tqdm import tqdm
 
 from models import LCV_ours_sub3
@@ -78,11 +79,14 @@ writer = SummaryWriter(writer_path)
 
 # import dataloader ------------------------------
 from dataloader import filename_loader as lt
+
 if args.real:
     from dataloader import grayscale_Loader as DA
+
     print("Real World image loaded!!!")
 else:
     from dataloader import RGB_Loader as DA
+
     print("Synthetic data image loaded!!!")
 # -------------------------------------------------
 
@@ -105,17 +109,17 @@ train_up_img, train_down_img, train_up_disp, valid_up_img, valid_down_img, valid
 Equi_infos = equi_info
 TrainImgLoader = torch.utils.data.DataLoader(DA.myImageFolder(
     Equi_infos, train_up_img, train_down_img, train_up_disp, True),
-                                             batch_size=args.batch,
-                                             shuffle=True,
-                                             num_workers=8,
-                                             drop_last=False)
+    batch_size=args.batch,
+    shuffle=True,
+    num_workers=8,
+    drop_last=False)
 
 ValidImgLoader = torch.utils.data.DataLoader(DA.myImageFolder(
     Equi_infos, valid_up_img, valid_down_img, valid_up_disp, False),
-                                             batch_size=args.batch,
-                                             shuffle=False,
-                                             num_workers=4,
-                                             drop_last=False)
+    batch_size=args.batch,
+    shuffle=False,
+    num_workers=4,
+    drop_last=False)
 # -----------------------------------------------------------------------------------------
 
 # Load model ----------------------------------------------
@@ -155,6 +159,7 @@ print('Number of model parameters: {}'.format(
 # Optimizer ----------
 optimizer = optim.Adam(model.parameters(), lr=0.01, betas=(0.9, 0.999))
 
+
 # ---------------------
 
 
@@ -174,6 +179,8 @@ freeze_layer(model.module.forF.forfilter1)
 def unfreeze_layer(layer):
     for param in layer.parameters():
         param.requires_grad = True
+
+
 # ------------------------------------
 
 
@@ -201,7 +208,7 @@ def train(imgU, imgD, disp):
         output1[mask], disp_true[mask], size_average=True
     ) + 0.7 * F.smooth_l1_loss(
         output2[mask], disp_true[mask], size_average=True) + F.smooth_l1_loss(
-            output3[mask], disp_true[mask], size_average=True)
+        output3[mask], disp_true[mask], size_average=True)
     # --------------------------------------------------
 
     loss.backward()
@@ -236,7 +243,6 @@ def val(imgU, imgD, disp_true):
 
 # Adjust Learning Rate
 def adjust_learning_rate(optimizer, epoch):
-
     lr = 0.001
     if epoch > args.start_decay:
         lr = 0.0001
@@ -321,7 +327,7 @@ def main():
             val_crop_rmse = np.sqrt(
                 np.mean((todepth(
                     val_output.data.cpu().numpy())[:, 26:486, :][mask_de_gt] -
-                         depth_gt[mask_de_gt])**2))
+                         depth_gt[mask_de_gt]) ** 2))
             # -------------------------------------------------------------
             # Loss ---------------------------------
             total_val_loss += val_loss
@@ -341,6 +347,8 @@ def main():
     print("Training Ended!!!")
     print('full training time = %.2f HR' %
           ((time.time() - start_full_time) / 3600))
+
+
 # ----------------------------------------------------------------------------
 
 

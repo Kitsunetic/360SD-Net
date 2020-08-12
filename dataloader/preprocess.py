@@ -1,9 +1,8 @@
-import torch
 import torchvision.transforms as transforms
 
 __imagenet_stats = {
-    'mean': [0.485, 0.456, 0.406],
-    'std': [0.229, 0.224, 0.225]
+    'mean': [0.485, 0.456, 0.406, 0.],
+    'std': [0.229, 0.224, 0.225, 1.]
 }
 
 
@@ -13,6 +12,7 @@ def color_normalize(normalize=__imagenet_stats):
         transforms.Normalize(**normalize),
     ]
 
+    # return transforms.ToTensor()
     return transforms.Compose(t_list)
 
 

@@ -1,14 +1,17 @@
 from __future__ import print_function
+
 import math
 
+import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.utils.data
 from torch.autograd import Variable
-import torch.nn.functional as F
-import numpy as np
 
-from sub_ASPP import convbn, convbn_3d, feature_extraction
+from .sub_ASPP import convbn_3d, feature_extraction
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 class forfilter(nn.Module):
@@ -19,7 +22,6 @@ class forfilter(nn.Module):
         self.inplanes = inplanes
 
     def forward(self, x):
-
         out = self.forfilter1(
             F.pad(torch.unsqueeze(x[:, 0, :, :], 1),
                   pad=(0, 0, 3, 3),
@@ -39,7 +41,7 @@ class disparityregression_sub3(nn.Module):
         super(disparityregression_sub3, self).__init__()
         self.disp = Variable(torch.Tensor(
             np.reshape(np.array(range(maxdisp * 3)), [1, maxdisp * 3, 1, 1]) /
-            3).cuda(),
+            3).to(device),
                              requires_grad=False)
 
     def forward(self, x):
@@ -161,8 +163,7 @@ class LCV(nn.Module):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
                 m.weight.data.normal_(0, math.sqrt(2. / n))
             elif isinstance(m, nn.Conv3d):
-                n = m.kernel_size[0] * m.kernel_size[1] * m.kernel_size[
-                    2] * m.out_channels
+                n = m.kernel_size[0] * m.kernel_size[1] * m.kernel_size[2] * m.out_channels
                 m.weight.data.normal_(0, math.sqrt(2. / n))
             elif isinstance(m, nn.BatchNorm2d):
                 m.weight.data.fill_(1)
@@ -179,18 +180,25 @@ class LCV(nn.Module):
         targetimg_fea = self.feature_extraction(down)  # target image feature
 
         # matching
+        """
         cost = Variable(
             torch.FloatTensor(refimg_fea.size()[0],
                               refimg_fea.size()[1] * 2, self.maxdisp / 4 * 3,
                               refimg_fea.size()[2],
                               refimg_fea.size()[3]).zero_()).cuda()
+        """
+        cost = torch.zeros((refimg_fea.shape[0],
+                            refimg_fea.shape[1] * 2,
+                            int(self.maxdisp / 4 * 3),
+                            refimg_fea.shape[2],
+                            refimg_fea.shape[3]), dtype=torch.float32)
+        if torch.cuda.is_available():
+            cost.cuda()
 
-        for i in range(self.maxdisp / 4 * 3):
+        for i in range(int(self.maxdisp / 4 * 3)):
             if i > 0:
-                cost[:, :refimg_fea.size()[1],
-                     i, :, :] = refimg_fea[:, :, :, :]
-                cost[:, refimg_fea.size()[1]:,
-                     i, :, :] = shift_down[:, :, :, :]
+                cost[:, :refimg_fea.size()[1], i, :, :] = refimg_fea[:, :, :, :]
+                cost[:, refimg_fea.size()[1]:, i, :, :] = shift_down[:, :, :, :]
                 shift_down = self.forF(shift_down)
             else:
                 cost[:, :refimg_fea.size()[1], i, :, :] = refimg_fea

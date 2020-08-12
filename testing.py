@@ -1,23 +1,26 @@
 from __future__ import print_function
+
+import argparse
 import os
 import time
 
-import argparse
+import numpy as np
+import skimage
+import skimage.io
+import skimage.transform
 import torch
 import torch.nn as nn
 import torch.nn.parallel
 import torch.utils.data
 from torch.autograd import Variable
 from torchvision import transforms
-import skimage
-import skimage.io
-import skimage.transform
-import numpy as np
 from tqdm import tqdm
 
 from dataloader import preprocess
-from models import LCV_ours_sub3
 from dataloader import testing_loader as DA
+from models import LCV_ours_sub3
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 parser = argparse.ArgumentParser(description='360SD-Net Testing')
 parser.add_argument('--datapath',
@@ -48,6 +51,7 @@ parser.add_argument('--seed',
                     help='random seed (default: 1)')
 parser.add_argument('--outfile',
                     type=str,
+                    default='outs',
                     help='the output path to put the output disparity')
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -72,7 +76,8 @@ else:
 
 # Model Multi-GPU -----------
 model = nn.DataParallel(model, device_ids=[0])
-model.cuda()
+if torch.cuda.is_available():
+    model.cuda()
 # ----------------------------
 
 # Real World inference ------
@@ -82,7 +87,8 @@ if args.real:
 
 # Load checkpoint --------------------------------
 if args.checkpoint is not None:
-    state_dict = torch.load(args.checkpoint)
+    print('Load checkpoint', args.checkpoint)
+    state_dict = torch.load(args.checkpoint, map_location=device)
     model.load_state_dict(state_dict['state_dict'])
 print('Number of model parameters: {}'.format(
     sum([p.data.nelement() for p in model.parameters()])))
@@ -92,6 +98,8 @@ print('Number of model parameters: {}'.format(
 angle_y = np.array([(i - 0.5) / 512 * 180 for i in range(256, -256, -1)])
 angle_ys = np.tile(angle_y[:, np.newaxis, np.newaxis], (1, 1024, 1))
 equi_info = angle_ys
+
+
 # ------------------------------------------------------------------
 
 
@@ -110,6 +118,8 @@ def test(imgU, imgD):
     pred_disp = output.data.cpu().numpy()
 
     return pred_disp
+
+
 # --------------------------------------------------------------------------
 
 
@@ -125,7 +135,7 @@ def main():
         if args.real:
             imgU_o = np.tile(
                 skimage.io.imread(test_up_img[inx], as_grey=True)[:, :,
-                                                                  np.newaxis],
+                np.newaxis],
                 (1, 1, 3)) * 255
             imgD_o = np.tile(
                 skimage.io.imread(test_down_img[inx],
@@ -159,6 +169,9 @@ def main():
         imgD = np.lib.pad(imgD, ((0, 0), (0, 0), (0, 0), (LR_pad, LR_pad)),
                           mode='wrap')
 
+        imgU = torch.tensor(imgU, dtype=torch.float32)
+        imgD = torch.tensor(imgD, dtype=torch.float32)
+
         # Testing and count time -------------------
         start_time = time.time()
         pred_disp = test(imgU, imgD)
@@ -177,6 +190,8 @@ def main():
     # Print Total Time
     print("Total time: ", total_time, "Average time: ",
           total_time / len(test_up_img))
+
+
 # ---------------------------------------------------------------------------
 
 
