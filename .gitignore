@@ -6,3 +6,4 @@ data/SF3D
 .vscode/
 events*
 logs/
+.idea
